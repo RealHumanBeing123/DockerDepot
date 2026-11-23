@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DockerDepot (offline)</title>
+<style>
+  :root {
+    --bg: #f6f7f8; --card: #ffffff; --text: #1d2125; --muted: #5d6670;
+    --line: #dadfe4; --accent: #0b6fb3; --accent-dark: #08507f; --on-accent: #ffffff;
+    --code-bg: #14181c; --code-text: #e6efe9; --warn-bg: #fff6df; --warn-text: #7a5200;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121416; --card: #1b1e21; --text: #e6e9ec; --muted: #9aa3ab;
+      --line: #2c3237; --accent: #38bdf8; --accent-dark: #7dd3fc; --on-accent: #0b0b0b;
+      --code-bg: #0b0d0f; --code-text: #e6efe9; --warn-bg: #3a2f12; --warn-text: #f1cf86;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px;
+           background: var(--accent); color: var(--on-accent); vertical-align: middle; margin-left: 8px; }
+  .out { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 8px 0 12px; }
+  pre#out { margin: 0; padding: 14px 16px; background: var(--code-bg); color: var(--code-text);
+            border-radius: 8px; overflow: auto; max-height: 34vh; white-space: pre-wrap; word-break: break-all;
+            font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-height: 52px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; align-items: center; }
+  button { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent);
+           background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  button:hover { background: var(--accent-dark); }
+  button.secondary { background: transparent; color: var(--accent-dark); }
+  button.secondary:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .bar label, .top label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 6px;
+          padding: 8px 12px; margin-top: 8px; font-size: 13px; }
+  .warn ul { margin: 0; padding-left: 18px; }
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; margin: 4px 0 12px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent-dark); }
+  table#exp { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  table#exp td { padding: 5px 8px 5px 0; vertical-align: top; border-top: 1px solid var(--line); }
+  table#exp td:first-child { width: 46%; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 4px 0 0; }
+  fieldset { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+             margin: 16px 0; padding: 4px 16px 8px; }
+  fieldset[hidden] { display: none; }
+  legend { font-weight: 600; padding: 0 8px; color: var(--accent-dark); }
+  .row { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 6px 16px; padding: 10px 0;
+         border-bottom: 1px solid var(--line); align-items: start; }
+  .row[hidden] { display: none; }
+  .row:last-child { border-bottom: 0; }
+  .row > .lbl { font-weight: 600; padding-top: 6px; }
+  .help { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  input[type=text], select, textarea { width: 100%; max-width: 620px; font: inherit; padding: 6px 8px;
+      border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; resize: vertical; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible
+      { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type=checkbox] { width: 18px; height: 18px; margin-top: 7px; }
+  select { width: auto; max-width: 100%; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+  @media (max-width: 640px) { .row { grid-template-columns: minmax(0, 1fr); } .row > .lbl { padding-top: 0; }
+                              table#exp td:first-child { width: auto; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>DockerDepot <span class="badge">offline</span></h1>
+  <p class="sub">Pick your options and get a ready-to-run <code>docker</code> command, with a plain-English explanation of every part. Nothing is sent anywhere: this page makes no network requests.</p>
+
+  <div class="out">
+    <pre id="out" aria-live="polite"></pre>
+    <div class="bar">
+      <button id="copy" type="button">Copy command</button>
+      <button id="save" type="button" class="secondary">Save as script</button>
+      <label>Shell
+        <select id="shell">
+          <option value="posix">bash / zsh / sh</option>
+          <option value="ps">PowerShell</option>
+          <option value="cmd">Windows cmd</option>
+        </select>
+      </label>
+      <label>Flags
+        <select id="syntax">
+          <option value="short">Short (-x)</option>
+          <option value="long">Long (--example)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="multiline" style="margin:0"> Multi-line</label>
+    </div>
+    <div id="warns" class="warn" hidden></div>
+  </div>
+
+  <details id="explain" open>
+    <summary>What each part does</summary>
+    <table id="exp"></table>
+  </details>
+
+  <div class="top">
+    <label>Quick start
+      <select id="preset"><option value="">Choose a recipe...</option></select>
+    </label>
+    <button id="reset" type="button" class="secondary">Reset all</button>
+  </div>
+
+  <div id="form"></div>
+
+  <footer>This builds a suggested command; it doesn't run anything. Use it as a starting point and edit before running. Commands that delete things (rm, prune, down --volumes) can't be undone. Less common options (swarm, buildx bake, contexts, plugins, advanced logging drivers) are left out; see <code>docker --help</code>.</footer>
+</main>
+
+<script>
+"use strict";
+
+// ---- field constructors --------------------------------------------------
+function F(id, label, o) { var f = { id: id, label: label }; if (o) for (var k in o) f[k] = o[k]; return f; }
+function T(id, label, o) { return F(id, label, o); }
+function A(id, label, o) { o = o || {}; o.type = "area"; return F(id, label, o); }
+function C(id, label, o) { o = o || {}; o.type = "check"; return F(id, label, o); }
+function S(id, label, opts, o) { o = o || {}; o.type = "select"; o.opts = opts; return F(id, label, o); }
+function sec(title, show, fields) { return { title: title, show: show, fields: fields }; }
+function at() { return { on: "cmd", is: [].slice.call(arguments) }; }
+function when(id) { return { on: id, is: [].slice.call(arguments, 1) }; }
+function range(vals, label) { return vals.map(function (v) { return [String(v), label ? label(v) : String(v)]; }); }
+
+// ---- visibility / defaults ----------------------------------------------
+function cond(c, s) {
+  if (!c) return true;
+  if (Array.isArray(c)) return c.every(function (x) { return cond(x, s); });
+  var v = s[c.on];
+  if (c.is) return c.is.indexOf(v) > -1;
+  if (c.not) return c.not.indexOf(v) === -1;
+  return true;
+}
+function visible(f, s) { return cond(f.sec && f.sec.show, s) && cond(f.show, s); }
+function allFields() {
+  var out = [];
+  SECTIONS.forEach(function (sc) { sc.fields.forEach(function (f) { f.sec = sc; out.push(f); }); });
+  return out;
+}
+function defOf(f) {
+  if (f.def !== undefined) return f.def;
+  if (f.type === "check") return false;
+  if (f.type === "select") return f.opts[0][0];
+  return "";
+}
+function defaults() {
+  var s = { syntax: "short", shell: "posix" };
+  allFields().forEach(function (f) { s[f.id] = defOf(f); });
+  return s;
+}
+
+// ---- quoting -------------------------------------------------------------
+function safeRe(shell) {
+  return shell === "posix" ? /^[A-Za-z0-9_@%+=:,.\/-]+$/ : /^[A-Za-z0-9_@%+=:,.\/\\-]+$/;
+}
+function quoteWhole(s, shell) {
+  if (s === "") return shell === "cmd" ? '""' : "''";
+  if (safeRe(shell).test(s)) return s;
+  if (/^[A-Za-z0-9_@%+=:,.\/\\-][A-Za-z0-9_@%+=:,.\/\\~-]*$/.test(s) && (shell !== "posix" || s.indexOf("\\") < 0)) return s; // ~ is only special at the start of a word
+  if (shell === "cmd") return '"' + s.replace(/"/g, '\\"') + '"';
+  return "'" + s.replace(/'/g, shell === "posix" ? "'\\''" : "''") + "'";
+}
+function quote(s, shell) {
+  if (/^-[A-Za-z#]+$/.test(s)) return s;
+  var m = /^(--?[A-Za-z][A-Za-z0-9-]*=)([\s\S]+)$/.exec(s);
+  if (m) return m[1] + quoteWhole(m[2], shell);
+  if (shell !== "cmd" && /^~(\/|$)/.test(s)) { // keep a leading ~ so the shell can expand it
+    var rest = s.slice(2);
+    return rest === "" ? s : "~/" + quoteWhole(rest, shell);
+  }
+  return quoteWhole(s, shell);
+}
+function lines(str) {
+  return (str || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+}
+// Split a typed command like:  bash -c 'echo hi'  into separate arguments.
+function splitArgs(str) {
+  var out = [], cur = "", q = "", has = false, i, c, n;
+  str = str || "";
+  for (i = 0; i < str.length; i++) {
+    c = str.charAt(i);
+    if (q) {
+      n = str.charAt(i + 1);
+      if (c === q) q = "";
+      else if (q === '"' && c === "\\" && (n === '"' || n === "\\")) { cur += n; i++; }
+      else cur += c;
+    } else if (c === "'" || c === '"') { q = c; has = true; }
+    else if (/\s/.test(c)) { if (cur !== "" || has) { out.push(cur); cur = ""; has = false; } }
+    else cur += c;
+  }
+  if (cur !== "" || has) out.push(cur);
+  return out;
+}
+
+// ---- command builder helper ---------------------------------------------
+// Each group is {t:[tokens], d:"description", h:true if it stays on the first line, m:true if mergeable like -a -v -> -av}
+function Builder(s) {
+  var L = s.syntax === "long", self = { g: [], w: [], L: L };
+  self.add = function (d, t, o) {
+    var x = { t: t, d: d };
+    if (o) for (var k in o) x[k] = o[k];
+    self.g.push(x);
+    return x;
+  };
+  self.head = function (d, t) { return self.add(d, t, { h: true }); };
+  self.flag = function (sh, lg, d) {
+    var t = L ? (lg || sh) : sh, x = self.add(d, [t]);
+    if (!L && /^-[A-Za-z]$/.test(t)) x.m = true;
+    return x;
+  };
+  self.val = function (sh, lg, v, d) { return self.add(d, [L ? (lg || sh) : sh, v]); };
+  self.opt = function (name, d) { return self.add(d, ["--" + name]); };
+  self.eq = function (name, v, d) { return self.add(d, ["--" + name + "=" + v]); };
+  self.kv = function (name, v, d) { return self.add(d, ["--" + name, v]); };
+  self.warn = function (m) { self.w.push(m); };
+  return self;
+}
+
+// ---- formatting ----------------------------------------------------------
+function tokensText(g, shell) { return g.t.map(function (t) { return quote(t, shell); }).join(" "); }
+
+function flatten(groups, shell, merge) {
+  var out = [], ci = -1, letters = "";
+  groups.forEach(function (g) {
+    if (merge && g.m && g.t.length === 1) {
+      if (ci < 0) { ci = out.length; out.push({ s: "", h: false }); }
+      letters += g.t[0].charAt(1);
+    } else out.push({ s: tokensText(g, shell), h: !!g.h });
+  });
+  if (ci >= 0) out[ci].s = "-" + letters;
+  return out;
+}
+
+function formatCommand(groups, shell, multiline, merge) {
+  var parts = flatten(groups, shell, merge), head = [APP.cmd], i = 0;
+  while (i < parts.length && parts[i].h) head.push(parts[i++].s);
+  var rest = parts.slice(i).map(function (p) { return p.s; });
+  if (!multiline) return head.concat(rest).join(" ");
+  var cont = shell === "posix" ? " \\" : (shell === "ps" ? " `" : " ^");
+  return [head.join(" ")].concat(rest).join(cont + "\n  ");
+}
+
+function shellWarnings(groups, shell, s) {
+  var toks = [], out = [];
+  groups.forEach(function (g) { g.t.forEach(function (t) { toks.push(t); }); });
+  if (shell === "ps" && toks.some(function (t) { return t.indexOf('"') > -1; }))
+    out.push("Windows PowerShell 5.1 can strip double quotes from arguments passed to other programs (PowerShell 7.3+ is fine). If a value contains double quotes, use PowerShell 7 or avoid them.");
+  if (shell === "cmd") {
+    if (toks.some(function (t) { return /[\r\n]/.test(t); })) out.push("cmd can't pass line breaks inside an argument. Keep each value on one line.");
+    if (toks.some(function (t) { return t.indexOf("%") > -1; })) out.push("Inside a .bat file, each % must be doubled (%%). At the interactive prompt, leave it as is.");
+  }
+  if (APP.shellWarn) out = out.concat(APP.shellWarn(toks, shell, s) || []);
+  return out;
+}
+
+
+var APP = { cmd: "docker", file: "docker-command", run: "Run Docker" };
+
+var CMDS = [
+  ["run", "run: start a new container from an image"],
+  ["build", "build: make an image from a Dockerfile"],
+  ["compose", "compose: manage multi-container apps"],
+  ["exec", "exec: run a command inside a running container"],
+  ["ps", "ps: list containers"],
+  ["logs", "logs: read a container's output"],
+  ["images", "images: list images"],
+  ["pull", "pull: download an image"],
+  ["push", "push: upload an image"],
+  ["stop", "stop / start / restart / kill / rm: control containers"],
+  ["cp", "cp: copy files between container and computer"],
+  ["inspect", "inspect: show full details as JSON"],
+  ["stats", "stats: live resource usage"],
+  ["tag", "tag: give an image another name"],
+  ["network", "network: manage networks"],
+  ["volume", "volume: manage volumes"],
+  ["prune", "prune: clean up unused things"],
+  ["login", "login: sign in to a registry"],
+  ["system", "system: disk usage and info"]
+];
+
+var SECTIONS = [
+  sec("What do you want to do?", null, [
+    S("cmd", "Docker command", CMDS, { help: "Pick a command and its options appear below." })
+  ]),
+
+  sec("Image and name", at("run"), [
+    T("runImage", "Image", { ph: "nginx:latest", help: "For example ubuntu:24.04 or ghcr.io/user/app:1.0." }),
+    T("runName", "Container name", { ph: "web" }),
+    S("runMode", "How it runs", [["detached", "In the background (-d)"], ["interactive", "Interactive terminal (-it)"], ["foreground", "In the foreground"]]),
+    C("runRm", "Remove it when it stops", { help: "Good for one-off commands. Don't use it for anything you want to inspect afterwards." }),
+    S("runRestart", "Restart policy", [["", "Never (default)"], ["unless-stopped", "Unless I stop it"], ["always", "Always"], ["on-failure", "Only after a crash"], ["on-failure:3", "After a crash, up to 3 times"]]),
+    T("runCmd", "Command to run inside", { ph: "bash  or  python app.py --debug", help: "Leave empty to use the image's own command." }),
+    T("runEntry", "Replace the entrypoint", { ph: "/bin/sh" }),
+    T("runUser", "Run as user", { ph: "1000:1000" }),
+    T("runWorkdir", "Working folder inside", { ph: "/app" }),
+    T("runHost", "Hostname", { ph: "web01" })
+  ]),
+
+  sec("Ports and networking", at("run"), [
+    A("runPorts", "Publish ports", { ph: "8080:80\n127.0.0.1:5432:5432", help: "One per line as host:container. Prefix with 127.0.0.1: to keep it off your network." }),
+    C("runPublishAll", "Publish every exposed port to random ports (-P)"),
+    T("runNet", "Network", { ph: "bridge, host, none, or a network name" }),
+    T("runAlias", "Network alias", { ph: "api", help: "Other containers on the same network can reach it by this name." }),
+    A("runDns", "DNS servers", { ph: "1.1.1.1\n8.8.8.8" }),
+    A("runAddHost", "Extra host entries", { ph: "db.local:192.168.1.10\nhost.docker.internal:host-gateway" })
+  ]),
+
+  sec("Storage and files", at("run"), [
+    A("runVols", "Mounts and volumes", { ph: "mydata:/var/lib/data\n./site:/usr/share/nginx/html:ro\n/var/run/docker.sock:/var/run/docker.sock", help: "One per line as source:target, optionally followed by :ro for read-only. A name creates a volume; a path mounts a folder." }),
+    A("runTmpfs", "Memory-only folders (tmpfs)", { ph: "/tmp" }),
+    C("runReadOnly", "Read-only root filesystem"),
+    T("runShm", "Shared memory size", { ph: "1g" })
+  ]),
+
+  sec("Environment", at("run"), [
+    A("runEnv", "Environment variables", { ph: "NODE_ENV=production\nPORT=3000", help: "One NAME=value per line. A line with only a name passes that variable from your shell." }),
+    T("runEnvFile", "Variables from a file", { ph: ".env" }),
+    A("runLabels", "Labels", { ph: "app=web\ntier=frontend" })
+  ]),
+
+  sec("Resources and security", at("run"), [
+    S("runMem", "Memory limit", [["", "No limit"], ["256m", "256 MB"], ["512m", "512 MB"], ["1g", "1 GB"], ["2g", "2 GB"], ["4g", "4 GB"], ["8g", "8 GB"]]),
+    S("runCpus", "CPU limit", [["", "No limit"], ["0.5", "Half a CPU"], ["1", "1 CPU"], ["2", "2 CPUs"], ["4", "4 CPUs"]]),
+    T("runGpus", "GPUs", { ph: "all", help: "Needs the NVIDIA container toolkit." }),
+    C("runPrivileged", "Privileged mode", { help: "Gives the container nearly full host access. Avoid unless you really need it." }),
+    T("runCapAdd", "Add capabilities", { ph: "NET_ADMIN SYS_TIME", help: "Separate several with spaces." }),
+    T("runCapDrop", "Drop capabilities", { ph: "ALL" }),
+    C("runNoNew", "Block privilege escalation"),
+    C("runInit", "Use a tiny init process", { help: "Cleans up zombie processes and passes signals properly." }),
+    S("runPull", "Image pulling", [["", "Only if missing (default)"], ["always", "Always check for a newer image"], ["never", "Never pull"]]),
+    T("runPlatform", "Platform", { ph: "linux/amd64" }),
+    T("runHealthCmd", "Health check command", { ph: "curl -f http://localhost/ || exit 1" }),
+    S("runHealthInt", "Check every", [["", "Default (30s)"], ["5s", "5 seconds"], ["10s", "10 seconds"], ["1m", "1 minute"]])
+  ]),
+
+  sec("Build an image", at("build"), [
+    T("bdContext", "Build folder", { def: ".", ph: ".", help: "The folder whose contents are sent to Docker. A dot means the current folder." }),
+    T("bdTag", "Image name and tag", { ph: "myapp:1.0", help: "Several can be given separated by spaces." }),
+    T("bdFile", "Dockerfile", { ph: "docker/Dockerfile.prod", help: "Leave empty to use ./Dockerfile." }),
+    A("bdArgs", "Build arguments", { ph: "NODE_VERSION=20\nAPP_ENV=prod", help: "One NAME=value per line." }),
+    T("bdTarget", "Stop at stage", { ph: "builder", help: "For multi-stage Dockerfiles." }),
+    C("bdNoCache", "Ignore the build cache"),
+    C("bdPull", "Always check for newer base images"),
+    T("bdPlatform", "Platform(s)", { ph: "linux/amd64,linux/arm64", help: "Several platforms need buildx and usually --push." }),
+    S("bdOutput", "When finished", [["", "Keep it in Docker (default)"], ["load", "Load it into Docker (--load)"], ["push", "Push to the registry (--push)"]]),
+    S("bdProgress", "Progress style", [["", "Automatic"], ["plain", "Plain text (full logs)"], ["tty", "Live terminal"]]),
+    T("bdCacheFrom", "Reuse cache from", { ph: "type=registry,ref=user/app:cache" }),
+    T("bdSecret", "Secret to use during build", { ph: "id=mytoken,src=token.txt" }),
+    C("bdSquash", "Quiet output (-q)", { help: "Prints only the image ID when done." })
+  ]),
+
+  sec("Docker Compose", at("compose"), [
+    S("cpAction", "Action", [["up", "up: create and start"], ["down", "down: stop and remove"], ["start", "start existing containers"], ["stop", "stop without removing"],
+      ["restart", "restart"], ["ps", "ps: list services"], ["logs", "logs: read output"], ["build", "build images"], ["pull", "pull images"], ["exec", "exec: run a command in a service"],
+      ["run", "run: one-off command in a new container"], ["config", "config: validate and show the final file"], ["images", "images: list images"]]),
+    T("cpServices", "Only these services", { ph: "web db", help: "Separate several with spaces. Leave empty for all of them." }),
+    T("cpFile", "Compose file", { ph: "docker-compose.prod.yml", help: "Leave empty to use compose.yaml or docker-compose.yml. Separate several with spaces." }),
+    T("cpProject", "Project name", { ph: "myproject" }),
+    T("cpProfile", "Profile", { ph: "debug" }),
+    T("cpEnvFile", "Variables from a file", { ph: ".env.prod" }),
+    C("cpDetach", "Run in the background", { show: when("cpAction", "up") }),
+    C("cpBuild", "Rebuild images first", { show: when("cpAction", "up", "run") }),
+    C("cpRecreate", "Recreate containers even if nothing changed", { show: when("cpAction", "up") }),
+    C("cpRemoveOrphans", "Remove containers not in the file", { show: when("cpAction", "up", "down") }),
+    C("cpWait", "Wait until services are healthy", { show: when("cpAction", "up") }),
+    S("cpScale", "Copies of the service", [["", "As in the file"], ["1", "1"], ["2", "2"], ["3", "3"], ["5", "5"]], { show: when("cpAction", "up"), help: "Applies to the first service you named. Needs a service." }),
+    C("cpVolumes", "Also delete volumes", { show: when("cpAction", "down"), help: "Deletes the data stored in named volumes." }),
+    S("cpRmi", "Also delete images", [["", "No"], ["local", "Only ones without a custom tag (local)"], ["all", "All used by services (all)"]], { show: when("cpAction", "down") }),
+    C("cpFollow", "Keep streaming new lines", { show: when("cpAction", "logs") }),
+    S("cpTail", "Lines from the end", [["", "All"], ["20", "20"], ["100", "100"], ["500", "500"]], { show: when("cpAction", "logs") }),
+    C("cpTimestamps", "Show timestamps", { show: when("cpAction", "logs") }),
+    C("cpNoCache", "Ignore the build cache", { show: when("cpAction", "build") }),
+    C("cpPullBuild", "Check for newer base images", { show: when("cpAction", "build") }),
+    T("cpCommand", "Command", { ph: "bash", show: when("cpAction", "exec", "run") }),
+    C("cpRm", "Remove the container afterwards", { def: true, show: when("cpAction", "run") }),
+    C("cpNoTty", "No terminal (for scripts)", { show: when("cpAction", "exec", "run") }),
+    S("cpFormat", "Output format", [["", "Table"], ["json", "JSON"]], { show: when("cpAction", "ps", "config", "images") }),
+    C("cpAll", "Include stopped containers", { show: when("cpAction", "ps") })
+  ]),
+
+  sec("Run a command inside", at("exec"), [
+    T("exContainer", "Container", { ph: "web" }),
+    T("exCmd", "Command", { def: "bash", ph: "bash  or  ls -la /app" }),
+    C("exTty", "Interactive terminal (-it)", { def: true, help: "Needed for shells like bash. Turn off in scripts." }),
+    T("exUser", "As user", { ph: "root" }),
+    T("exWorkdir", "In folder", { ph: "/app" }),
+    A("exEnv", "Environment variables", { ph: "DEBUG=1" }),
+    C("exDetach", "In the background")
+  ]),
+
+  sec("List containers", at("ps"), [
+    C("psAll", "Include stopped ones (-a)"),
+    C("psQuiet", "IDs only (-q)"),
+    C("psSize", "Show disk size (-s)"),
+    C("psLatest", "Only the most recently created (-l)"),
+    S("psFilter", "Filter by status", [["", "None"], ["running", "Running"], ["exited", "Exited"], ["paused", "Paused"], ["restarting", "Restarting"], ["created", "Created"]]),
+    T("psName", "Name contains", { ph: "web" }),
+    S("psFormat", "Layout", [["", "Default table"], ["names", "Name, image and status"], ["json", "JSON, one per line"]]),
+    C("psNoTrunc", "Don't shorten long text")
+  ]),
+
+  sec("Read logs", at("logs"), [
+    T("lgContainer", "Container", { ph: "web" }),
+    C("lgFollow", "Keep streaming new lines (-f)"),
+    S("lgTail", "Lines from the end", [["", "All"], ["20", "20"], ["50", "50"], ["100", "100"], ["500", "500"]]),
+    T("lgSince", "Since", { ph: "10m  or  2026-11-22T10:00:00" }),
+    T("lgUntil", "Until", { ph: "5m" }),
+    C("lgTime", "Show timestamps (-t)"),
+    C("lgDetails", "Show extra log details")
+  ]),
+
+  sec("List images", at("images"), [
+    C("imAll", "Include intermediate layers (-a)"),
+    C("imQuiet", "IDs only (-q)"),
+    C("imDigests", "Show digests"),
+    C("imDangling", "Only untagged leftovers"),
+    T("imRepo", "Only this repository", { ph: "nginx" }),
+    S("imFormat", "Layout", [["", "Default table"], ["tag", "Repository:tag and size"], ["json", "JSON"]])
+  ]),
+
+  sec("Pull or push an image", at("pull", "push"), [
+    T("plImage", "Image", { ph: "nginx:latest", help: "Add a tag after a colon, or @sha256:... for an exact version." }),
+    C("plAll", "Every tag of it", { show: when("cmd", "pull"), help: "Downloads all versions. Can be huge." }),
+    T("plPlatform", "Platform", { ph: "linux/arm64", show: when("cmd", "pull") }),
+    C("plQuiet", "Quiet")
+  ]),
+
+  sec("Stop, start or remove containers", at("stop"), [
+    S("stAction", "Action", [["stop", "Stop gracefully (stop)"], ["start", "Start (start)"], ["restart", "Restart (restart)"], ["kill", "Stop immediately (kill)"],
+      ["pause", "Freeze (pause)"], ["unpause", "Unfreeze (unpause)"], ["rm", "Delete (rm)"]]),
+    T("stTargets", "Container(s)", { ph: "web db", help: "Names or IDs separated by spaces." }),
+    S("stTime", "Wait before force-killing", [["", "Default (10 seconds)"], ["0", "Don't wait"], ["30", "30 seconds"], ["60", "1 minute"]], { show: when("stAction", "stop", "restart") }),
+    C("stForce", "Even if it's running (-f)", { show: when("stAction", "rm") }),
+    C("stVolumes", "Also delete its anonymous volumes (-v)", { show: when("stAction", "rm") }),
+    C("stAttach", "Attach to the output", { show: when("stAction", "start") }),
+    T("stSignal", "Signal", { ph: "SIGTERM", show: when("stAction", "kill") })
+  ]),
+
+  sec("Copy files", at("cp"), [
+    T("cpFrom", "From", { ph: "web:/etc/nginx/nginx.conf", help: "Use container:/path for files inside a container." }),
+    T("cpTo", "To", { ph: "./nginx.conf" }),
+    C("cpArchive", "Keep owner and group (-a)"),
+    C("cpFollowLink", "Follow symlinks (-L)")
+  ]),
+
+  sec("Inspect", at("inspect"), [
+    T("inTarget", "Container, image or other object", { ph: "web" }),
+    T("inFormat", "Pick one field", { ph: "{{.NetworkSettings.IPAddress}}", help: "A Go template. Leave empty to see everything." }),
+    S("inType", "Object type", [["", "Auto-detect"], ["container", "Container"], ["image", "Image"], ["network", "Network"], ["volume", "Volume"]]),
+    C("inSize", "Include file sizes")
+  ]),
+
+  sec("Live stats", at("stats"), [
+    T("sttTargets", "Containers", { ph: "web db", help: "Leave empty for all running containers." }),
+    C("sttNoStream", "Show once and exit"),
+    C("sttAll", "Include stopped containers"),
+    C("sttNoTrunc", "Don't shorten IDs"),
+    S("sttFormat", "Layout", [["", "Default"], ["compact", "Name, CPU and memory"], ["json", "JSON"]])
+  ]),
+
+  sec("Tag an image", at("tag"), [
+    T("tgSource", "Existing image", { ph: "myapp:1.0" }),
+    T("tgTarget", "New name", { ph: "user/myapp:latest", help: "Include the registry address to push elsewhere, for example ghcr.io/user/myapp:1.0." })
+  ]),
+
+  sec("Networks", at("network"), [
+    S("ntAction", "Action", [["ls", "List"], ["create", "Create"], ["rm", "Delete"], ["inspect", "Inspect"], ["connect", "Attach a container"], ["disconnect", "Detach a container"], ["prune", "Remove unused"]]),
+    T("ntName", "Network", { ph: "appnet", show: when("ntAction", "create", "rm", "inspect", "connect", "disconnect") }),
+    T("ntContainer", "Container", { ph: "web", show: when("ntAction", "connect", "disconnect") }),
+    S("ntDriver", "Type", [["", "Default (bridge)"], ["bridge", "bridge"], ["overlay", "overlay"], ["macvlan", "macvlan"]], { show: when("ntAction", "create") }),
+    T("ntSubnet", "Subnet", { ph: "172.30.0.0/16", show: when("ntAction", "create") }),
+    C("ntInternal", "No outside access", { show: when("ntAction", "create") }),
+    C("ntAttachable", "Let standalone containers attach", { show: when("ntAction", "create") }),
+    C("ntForce", "Don't ask", { show: when("ntAction", "prune") })
+  ]),
+
+  sec("Volumes", at("volume"), [
+    S("vlAction", "Action", [["ls", "List"], ["create", "Create"], ["rm", "Delete"], ["inspect", "Inspect"], ["prune", "Remove unused"]]),
+    T("vlName", "Volume", { ph: "mydata", show: when("vlAction", "create", "rm", "inspect") }),
+    T("vlDriver", "Driver", { ph: "local", show: when("vlAction", "create") }),
+    A("vlLabels", "Labels", { ph: "env=prod", show: when("vlAction", "create") }),
+    C("vlAll", "Also remove named volumes", { show: when("vlAction", "prune"), help: "Normally only anonymous ones are removed." }),
+    C("vlForce", "Don't ask", { show: when("vlAction", "prune", "rm") })
+  ]),
+
+  sec("Clean up", at("prune"), [
+    S("prWhat", "What to clean", [["system", "Everything unused (system)"], ["container", "Stopped containers"], ["image", "Unused images"], ["volume", "Unused volumes"], ["network", "Unused networks"], ["builder", "Build cache"]]),
+    C("prAll", "Include all unused images, not just untagged", { show: when("prWhat", "system", "image"), help: "Without it, only dangling (untagged) images go." }),
+    C("prVolumes", "Also remove volumes", { show: when("prWhat", "system"), help: "Deletes data in unused named volumes." }),
+    T("prUntil", "Only older than", { ph: "24h", help: "Time like 24h or 168h. Keeps recent things." }),
+    C("prForce", "Don't ask for confirmation (-f)")
+  ]),
+
+  sec("Sign in to a registry", at("login"), [
+    T("loServer", "Registry address", { ph: "ghcr.io", help: "Leave empty for Docker Hub." }),
+    T("loUser", "Username", { ph: "myuser" }),
+    C("loStdin", "Read the password from standard input", { def: true, help: "Safer than typing it in the command. Pipe it in, for example from a file or password manager." })
+  ]),
+
+  sec("System", at("system"), [
+    S("syAction", "Action", [["df", "df: disk usage"], ["info", "info: details about this Docker install"], ["events", "events: stream what's happening"], ["prune", "prune: remove unused data"]]),
+    C("syVerbose", "Show per-item detail", { show: when("syAction", "df") }),
+    T("sySince", "Events since", { ph: "1h", show: when("syAction", "events") }),
+    C("syForce", "Don't ask", { show: when("syAction", "prune") }),
+    C("syVolumes", "Also remove volumes", { show: when("syAction", "prune") }),
+    C("syAll", "Remove all unused images", { show: when("syAction", "prune") })
+  ])
+];
+
+var PRESETS = {
+  "Run a web server": { cmd: "run", runImage: "nginx:latest", runName: "web", runPorts: "8080:80", runRestart: "unless-stopped" },
+  "Throwaway shell in an image": { cmd: "run", runImage: "ubuntu:24.04", runMode: "interactive", runRm: true, runCmd: "bash" },
+  "Database with a saved volume": { cmd: "run", runImage: "postgres:16", runName: "db", runPorts: "127.0.0.1:5432:5432", runVols: "pgdata:/var/lib/postgresql/data", runEnv: "POSTGRES_PASSWORD=change-me", runRestart: "unless-stopped" },
+  "Serve a local folder": { cmd: "run", runImage: "nginx:alpine", runName: "site", runPorts: "8080:80", runVols: "./site:/usr/share/nginx/html:ro", runRm: true },
+  "Build an image": { cmd: "build", bdTag: "myapp:1.0", bdContext: "." },
+  "Fresh rebuild, no cache": { cmd: "build", bdTag: "myapp:latest", bdNoCache: true, bdPull: true, bdProgress: "plain" },
+  "Start Compose in the background": { cmd: "compose", cpAction: "up", cpDetach: true, cpBuild: true },
+  "Stop Compose and wipe data": { cmd: "compose", cpAction: "down", cpVolumes: true, cpRemoveOrphans: true },
+  "Follow Compose logs": { cmd: "compose", cpAction: "logs", cpFollow: true, cpTail: "100" },
+  "Open a shell in a container": { cmd: "exec", exContainer: "web", exCmd: "bash", exTty: true },
+  "Follow the last 100 log lines": { cmd: "logs", lgContainer: "web", lgFollow: true, lgTail: "100", lgTime: true },
+  "List all containers": { cmd: "ps", psAll: true },
+  "Copy a file out of a container": { cmd: "cp", cpFrom: "web:/etc/nginx/nginx.conf", cpTo: "./nginx.conf" },
+  "Get a container's IP": { cmd: "inspect", inTarget: "web", inFormat: "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" },
+  "Free up disk space": { cmd: "prune", prWhat: "system", prAll: true },
+  "Log in to GitHub registry": { cmd: "login", loServer: "ghcr.io", loUser: "myuser" }
+};
+
+function build(s) {
+  var b = Builder(s), c = s.cmd;
+  function trim(v) { return (v || "").trim(); }
+  function each(str, f) { lines(str).forEach(f); }
+
+  switch (c) {
+  case "run":
+    b.head("Create and start a container", ["run"]);
+    if (s.runMode === "detached") b.flag("-d", "--detach", "Run in the background and print the container ID");
+    if (s.runMode === "interactive") { b.flag("-i", "--interactive", "Keep input open"); b.flag("-t", "--tty", "Give it a terminal"); }
+    if (s.runRm) b.opt("rm", "Delete the container when it stops");
+    if (trim(s.runName)) b.kv("name", trim(s.runName), "Call it \"" + trim(s.runName) + "\" instead of a random name");
+    if (s.runRestart) b.kv("restart", s.runRestart, "Restart policy: " + s.runRestart);
+    each(s.runPorts, function (p) {
+      b.val("-p", "--publish", p, "Publish port " + p.split(":").slice(-2)[0] + " to the container's " + p.split(":").slice(-1)[0]);
+      if (!/^(\d{1,3}(\.\d{1,3}){3}:)?\d+(-\d+)?:\d+(-\d+)?(\/(tcp|udp))?$/.test(p)) b.warn("The port mapping \"" + p + "\" should look like 8080:80 or 127.0.0.1:8080:80.");
+      if (/^\d+:\d+/.test(p)) b.warn("Port " + p.split(":")[0] + " is open to your whole network. Prefix it with 127.0.0.1: to keep it local.");
+    });
+    if (s.runPublishAll) b.flag("-P", "--publish-all", "Publish every exposed port to a random host port");
+    if (trim(s.runNet)) b.kv("network", trim(s.runNet), "Connect to the \"" + trim(s.runNet) + "\" network");
+    if (trim(s.runAlias)) b.kv("network-alias", trim(s.runAlias), "Reachable by this name on the network");
+    each(s.runDns, function (d) { b.kv("dns", d, "Use DNS server " + d); });
+    each(s.runAddHost, function (h) { b.kv("add-host", h, "Add a hosts entry for " + h.split(":")[0]); });
+    each(s.runVols, function (v) {
+      b.val("-v", "--volume", v, "Mount " + v.split(":")[0] + " inside the container");
+      if (/^\/var\/run\/docker\.sock/.test(v)) b.warn("Mounting the Docker socket gives that container full control of Docker (and effectively the host).");
+      if (/^\.\//.test(v) === false && !/^[A-Za-z0-9_.-]+:/.test(v) && !/^\//.test(v) && !/^[A-Za-z]:[\\/]/.test(v) && !/^~/.test(v) && !/^\$/.test(v)) b.warn("The mount \"" + v + "\" should start with a volume name or a folder path, such as ./site:/usr/share/nginx/html.");
+    });
+    each(s.runTmpfs, function (t) { b.kv("tmpfs", t, "Memory-only folder at " + t); });
+    if (s.runReadOnly) b.opt("read-only", "Make the container's filesystem read-only");
+    if (trim(s.runShm)) b.kv("shm-size", trim(s.runShm), "Shared memory size");
+    each(s.runEnv, function (e) { b.val("-e", "--env", e, e.indexOf("=") > -1 ? "Set the variable " + e.split("=")[0] : "Pass " + e + " from your shell"); });
+    if (trim(s.runEnvFile)) b.kv("env-file", trim(s.runEnvFile), "Read variables from this file");
+    each(s.runLabels, function (l) { b.val("-l", "--label", l, "Add the label " + l.split("=")[0]); });
+    if (s.runMem) b.val("-m", "--memory", s.runMem, "Limit memory to " + s.runMem);
+    if (s.runCpus) b.kv("cpus", s.runCpus, "Limit to " + s.runCpus + " CPU(s)");
+    if (trim(s.runGpus)) b.kv("gpus", trim(s.runGpus), "Give the container GPU access");
+    if (s.runPrivileged) { b.opt("privileged", "Give the container nearly full access to the host"); b.warn("Privileged mode removes most isolation. Use specific capabilities instead if you can."); }
+    splitArgs(s.runCapAdd).forEach(function (x) { b.kv("cap-add", x, "Add the " + x + " capability"); });
+    splitArgs(s.runCapDrop).forEach(function (x) { b.kv("cap-drop", x, "Drop the " + x + " capability"); });
+    if (s.runNoNew) b.kv("security-opt", "no-new-privileges", "Stop processes gaining extra privileges");
+    if (s.runInit) b.opt("init", "Run a tiny init process as PID 1");
+    if (s.runPull) b.kv("pull", s.runPull, "Pull policy: " + s.runPull);
+    if (trim(s.runPlatform)) b.kv("platform", trim(s.runPlatform), "Use the " + trim(s.runPlatform) + " build of the image");
+    if (trim(s.runHealthCmd)) {
+      b.kv("health-cmd", trim(s.runHealthCmd), "Command that decides if it's healthy");
+      if (s.runHealthInt) b.kv("health-interval", s.runHealthInt, "Check every " + s.runHealthInt);
+    }
+    if (trim(s.runUser)) b.val("-u", "--user", trim(s.runUser), "Run as this user");
+    if (trim(s.runWorkdir)) b.val("-w", "--workdir", trim(s.runWorkdir), "Start in this folder inside");
+    if (trim(s.runHost)) b.val("-h", "--hostname", trim(s.runHost), "Set the container's hostname");
+    if (trim(s.runEntry)) b.kv("entrypoint", trim(s.runEntry), "Replace the image's entrypoint");
+    if (trim(s.runImage)) b.add("The image to run", [trim(s.runImage)]); else b.warn("Enter an image, for example nginx:latest.");
+    splitArgs(s.runCmd).forEach(function (x) { b.add("Command passed to the container", [x]); });
+    if (s.runMode === "interactive" && !trim(s.runCmd)) b.warn("An interactive run usually needs a command such as bash or sh.");
+    if (/:latest$/.test(trim(s.runImage)) || (trim(s.runImage) && trim(s.runImage).indexOf(":") < 0 && trim(s.runImage).indexOf("@") < 0))
+      b.warn("The image has no fixed version (or uses latest), so it can change under you. Pin a version like nginx:1.27 for repeatable results.");
+    if (s.runRm && s.runRestart) b.warn("--rm can't be combined with a restart policy; Docker will refuse.");
+    if (s.runMode === "detached" && s.runRm) b.warn("A detached container with --rm vanishes as soon as it stops, along with its logs.");
+    break;
+
+  case "build":
+    b.head("Build an image", ["build"]);
+    splitArgs(s.bdTag).forEach(function (t) { b.val("-t", "--tag", t, "Name the image " + t); });
+    if (trim(s.bdFile)) b.val("-f", "--file", trim(s.bdFile), "Use this Dockerfile");
+    each(s.bdArgs, function (a) { b.kv("build-arg", a, "Pass the build argument " + a.split("=")[0]); });
+    if (trim(s.bdTarget)) b.kv("target", trim(s.bdTarget), "Build only up to the \"" + trim(s.bdTarget) + "\" stage");
+    if (s.bdNoCache) b.opt("no-cache", "Ignore cached steps and rebuild everything");
+    if (s.bdPull) b.opt("pull", "Check for newer base images");
+    if (trim(s.bdPlatform)) b.kv("platform", trim(s.bdPlatform), "Build for " + trim(s.bdPlatform));
+    if (s.bdOutput === "load") b.opt("load", "Load the result into the local Docker");
+    if (s.bdOutput === "push") b.opt("push", "Push the result to the registry");
+    if (s.bdProgress) b.kv("progress", s.bdProgress, "Progress style: " + s.bdProgress);
+    if (trim(s.bdCacheFrom)) b.kv("cache-from", trim(s.bdCacheFrom), "Reuse cached layers from here");
+    if (trim(s.bdSecret)) b.kv("secret", trim(s.bdSecret), "Make a secret available during the build");
+    if (s.bdSquash) b.flag("-q", "--quiet", "Print only the image ID");
+    b.add("The build folder", [trim(s.bdContext) || "."]);
+    if (!splitArgs(s.bdTag).length) b.warn("No tag given, so the image will only have an ID. Add one like myapp:1.0.");
+    if (trim(s.bdPlatform).indexOf(",") > -1 && s.bdOutput !== "push") b.warn("Building several platforms at once usually needs --push (the local image store can only hold one).");
+    if (trim(s.bdSecret) && /^[A-Za-z0-9_-]+$/.test(trim(s.bdSecret))) b.warn("Secrets are written as id=name,src=path.");
+    break;
+
+  case "compose":
+    b.head("Manage a multi-container app", ["compose"]);
+    splitArgs(s.cpFile).forEach(function (f) { b.val("-f", "--file", f, "Use this Compose file"); });
+    if (trim(s.cpProject)) b.val("-p", "--project-name", trim(s.cpProject), "Name the project");
+    if (trim(s.cpProfile)) b.kv("profile", trim(s.cpProfile), "Also start services in this profile");
+    if (trim(s.cpEnvFile)) b.kv("env-file", trim(s.cpEnvFile), "Read variables from this file");
+    var act = s.cpAction;
+    b.head({ up: "Create and start the services", down: "Stop and remove the services", start: "Start existing containers", stop: "Stop the services",
+      restart: "Restart the services", ps: "List the services", logs: "Show service logs", build: "Build the images", pull: "Download the images",
+      exec: "Run a command in a running service", run: "Run a one-off command in a new container", config: "Check and print the final configuration", images: "List images used" }[act], [act]);
+    var svc = splitArgs(s.cpServices);
+    if (act === "up") {
+      if (s.cpDetach) b.flag("-d", "--detach", "Run in the background");
+      if (s.cpBuild) b.opt("build", "Rebuild images before starting");
+      if (s.cpRecreate) b.opt("force-recreate", "Recreate containers even if unchanged");
+      if (s.cpRemoveOrphans) b.opt("remove-orphans", "Remove containers for services no longer in the file");
+      if (s.cpWait) b.opt("wait", "Wait until services are running or healthy");
+      if (s.cpScale && svc.length) b.kv("scale", svc[0] + "=" + s.cpScale, "Run " + s.cpScale + " copy/copies of " + svc[0]);
+      else if (s.cpScale) b.warn("Name a service to scale.");
+    }
+    if (act === "down") {
+      if (s.cpVolumes) { b.flag("-v", "--volumes", "Also delete named volumes"); b.warn("This deletes the data stored in the project's volumes."); }
+      if (s.cpRmi) b.kv("rmi", s.cpRmi, "Also delete images");
+      if (s.cpRemoveOrphans) b.opt("remove-orphans", "Remove containers for services no longer in the file");
+    }
+    if (act === "logs") {
+      if (s.cpFollow) b.flag("-f", "--follow", "Keep streaming new lines");
+      if (s.cpTail) b.kv("tail", s.cpTail, "Start from the last " + s.cpTail + " lines");
+      if (s.cpTimestamps) b.flag("-t", "--timestamps", "Show timestamps");
+    }
+    if (act === "build") {
+      if (s.cpNoCache) b.opt("no-cache", "Ignore cached steps");
+      if (s.cpPullBuild) b.opt("pull", "Check for newer base images");
+    }
+    if (act === "run") {
+      if (s.cpRm) b.opt("rm", "Remove the container afterwards");
+      if (s.cpBuild) b.opt("build", "Rebuild the image first");
+    }
+    if (act === "exec" || act === "run") {
+      if (s.cpNoTty) b.flag("-T", "--no-TTY", "No terminal (use in scripts)");
+    }
+    if ((act === "ps" || act === "config" || act === "images") && s.cpFormat) b.kv("format", s.cpFormat, "Output as " + s.cpFormat);
+    if (act === "ps" && s.cpAll) b.flag("-a", "--all", "Include stopped containers");
+    if (act === "exec" || act === "run") {
+      if (!svc.length) b.warn("Name the service to run the command in.");
+      else b.add("The service", [svc[0]]);
+      splitArgs(s.cpCommand).forEach(function (x) { b.add("The command", [x]); });
+      if (!trim(s.cpCommand)) b.warn("Enter a command, for example bash.");
+    } else svc.forEach(function (x) { b.add("Only this service", [x]); });
+    if (act === "up" && !s.cpDetach) b.warn("Without the background option, up keeps running in your terminal and stops the app when you press Ctrl+C.");
+    break;
+
+  case "exec":
+    b.head("Run a command in a running container", ["exec"]);
+    if (s.exTty) { b.flag("-i", "--interactive", "Keep input open"); b.flag("-t", "--tty", "Give it a terminal"); }
+    if (s.exDetach) b.flag("-d", "--detach", "Run in the background");
+    if (trim(s.exUser)) b.val("-u", "--user", trim(s.exUser), "Run as this user");
+    if (trim(s.exWorkdir)) b.val("-w", "--workdir", trim(s.exWorkdir), "Start in this folder");
+    each(s.exEnv, function (e) { b.val("-e", "--env", e, "Set the variable " + e.split("=")[0]); });
+    if (trim(s.exContainer)) b.add("The running container", [trim(s.exContainer)]); else b.warn("Enter the container name or ID.");
+    splitArgs(s.exCmd).forEach(function (x) { b.add("The command", [x]); });
+    if (!trim(s.exCmd)) b.warn("Enter a command to run.");
+    if (s.exTty && s.exDetach) b.warn("A background command has no use for an interactive terminal.");
+    break;
+
+  case "ps":
+    b.head("List containers", ["ps"]);
+    if (s.psAll) b.flag("-a", "--all", "Include stopped containers");
+    if (s.psQuiet) b.flag("-q", "--quiet", "Print only IDs");
+    if (s.psSize) b.flag("-s", "--size", "Show each container's disk size");
+    if (s.psLatest) b.flag("-l", "--latest", "Only the most recently created");
+    if (s.psFilter) b.kv("filter", "status=" + s.psFilter, "Only " + s.psFilter + " containers");
+    if (trim(s.psName)) b.kv("filter", "name=" + trim(s.psName), "Only names containing " + trim(s.psName));
+    if (s.psFormat === "names") b.kv("format", "table {{.Names}}\\t{{.Image}}\\t{{.Status}}", "Show name, image and status");
+    if (s.psFormat === "json") b.kv("format", "json", "One JSON object per container");
+    if (s.psNoTrunc) b.opt("no-trunc", "Don't shorten long values");
+    break;
+
+  case "logs":
+    b.head("Show a container's output", ["logs"]);
+    if (s.lgFollow) b.flag("-f", "--follow", "Keep streaming new lines");
+    if (s.lgTail) b.add("Start from the last " + s.lgTail + " lines", [s.syntax === "long" ? "--tail" : "-n", s.lgTail]);
+    if (trim(s.lgSince)) b.kv("since", trim(s.lgSince), "Only lines after this time");
+    if (trim(s.lgUntil)) b.kv("until", trim(s.lgUntil), "Only lines before this time");
+    if (s.lgTime) b.flag("-t", "--timestamps", "Show timestamps");
+    if (s.lgDetails) b.opt("details", "Show extra log attributes");
+    if (trim(s.lgContainer)) b.add("The container", [trim(s.lgContainer)]); else b.warn("Enter the container name or ID.");
+    break;
+
+  case "images":
+    b.head("List images", ["images"]);
+    if (s.imAll) b.flag("-a", "--all", "Include intermediate layers");
+    if (s.imQuiet) b.flag("-q", "--quiet", "Print only IDs");
+    if (s.imDigests) b.opt("digests", "Show digests");
+    if (s.imDangling) b.kv("filter", "dangling=true", "Only untagged leftovers");
+    if (s.imFormat === "tag") b.kv("format", "table {{.Repository}}:{{.Tag}}\\t{{.Size}}", "Show name:tag and size");
+    if (s.imFormat === "json") b.kv("format", "json", "One JSON object per image");
+    if (trim(s.imRepo)) b.add("Only this repository", [trim(s.imRepo)]);
+    break;
+
+  case "pull":
+  case "push":
+    b.head(c === "pull" ? "Download an image" : "Upload an image", [c]);
+    if (c === "pull" && s.plAll) b.flag("-a", "--all-tags", "Download every tag");
+    if (c === "pull" && trim(s.plPlatform)) b.kv("platform", trim(s.plPlatform), "Download the " + trim(s.plPlatform) + " build");
+    if (s.plQuiet) b.flag("-q", "--quiet", "Suppress progress output");
+    if (trim(s.plImage)) b.add("The image", [trim(s.plImage)]); else b.warn("Enter an image name.");
+    if (c === "push" && trim(s.plImage) && trim(s.plImage).indexOf("/") < 0) b.warn("Pushing to Docker Hub needs a name like username/app. Tag it first with the tag command.");
+    break;
+
+  case "stop":
+    var act2 = s.stAction;
+    b.head({ stop: "Stop containers gracefully", start: "Start stopped containers", restart: "Restart containers", kill: "Stop containers immediately",
+      pause: "Freeze containers", unpause: "Unfreeze containers", rm: "Delete containers" }[act2], [act2]);
+    if ((act2 === "stop" || act2 === "restart") && s.stTime !== "") b.val("-t", "--time", s.stTime, "Wait " + s.stTime + "s before force-killing");
+    if (act2 === "rm" && s.stForce) b.flag("-f", "--force", "Delete even if it's running");
+    if (act2 === "rm" && s.stVolumes) { b.flag("-v", "--volumes", "Also delete its anonymous volumes"); b.warn("Deleting volumes removes the data stored in them."); }
+    if (act2 === "start" && s.stAttach) b.flag("-a", "--attach", "Attach to the container's output");
+    if (act2 === "kill" && trim(s.stSignal)) b.val("-s", "--signal", trim(s.stSignal), "Send this signal");
+    var tg = splitArgs(s.stTargets);
+    tg.forEach(function (t) { b.add("The container", [t]); });
+    if (!tg.length) b.warn("Enter at least one container name or ID.");
+    if (act2 === "rm") b.warn("Deleted containers can't be recovered, but images and named volumes stay.");
+    break;
+
+  case "cp":
+    b.head("Copy files between a container and your computer", ["cp"]);
+    if (s.cpArchive) b.flag("-a", "--archive", "Keep owner and group");
+    if (s.cpFollowLink) b.flag("-L", "--follow-link", "Follow symlinks");
+    if (trim(s.cpFrom)) b.add("Copy from here", [trim(s.cpFrom)]); else b.warn("Enter the source.");
+    if (trim(s.cpTo)) b.add("Copy to here", [trim(s.cpTo)]); else b.warn("Enter the destination.");
+    if (trim(s.cpFrom) && trim(s.cpTo) && trim(s.cpFrom).indexOf(":") < 0 && trim(s.cpTo).indexOf(":") < 0)
+      b.warn("One side must be container:/path, otherwise nothing refers to a container.");
+    break;
+
+  case "inspect":
+    b.head("Show full details as JSON", ["inspect"]);
+    if (trim(s.inFormat)) b.val("-f", "--format", trim(s.inFormat), "Print just this field");
+    if (s.inType) b.kv("type", s.inType, "Look only at " + s.inType + " objects");
+    if (s.inSize) b.flag("-s", "--size", "Include file sizes");
+    if (trim(s.inTarget)) b.add("The object", [trim(s.inTarget)]); else b.warn("Enter a container, image or other object name.");
+    break;
+
+  case "stats":
+    b.head("Show live resource usage", ["stats"]);
+    if (s.sttNoStream) b.opt("no-stream", "Print once instead of updating");
+    if (s.sttAll) b.flag("-a", "--all", "Include stopped containers");
+    if (s.sttNoTrunc) b.opt("no-trunc", "Don't shorten IDs");
+    if (s.sttFormat === "compact") b.kv("format", "table {{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}", "Show name, CPU and memory");
+    if (s.sttFormat === "json") b.kv("format", "json", "One JSON object per container");
+    splitArgs(s.sttTargets).forEach(function (t) { b.add("Only this container", [t]); });
+    break;
+
+  case "tag":
+    b.head("Give an image another name", ["tag"]);
+    if (trim(s.tgSource)) b.add("The existing image", [trim(s.tgSource)]); else b.warn("Enter the existing image.");
+    if (trim(s.tgTarget)) b.add("The new name", [trim(s.tgTarget)]); else b.warn("Enter the new name.");
+    break;
+
+  case "network":
+    b.head("Manage networks", ["network"]);
+    var na = s.ntAction;
+    b.head({ ls: "List networks", create: "Create a network", rm: "Delete a network", inspect: "Show a network's details", connect: "Attach a container", disconnect: "Detach a container", prune: "Remove unused networks" }[na], [na]);
+    if (na === "create") {
+      if (s.ntDriver) b.val("-d", "--driver", s.ntDriver, "Use the " + s.ntDriver + " driver");
+      if (trim(s.ntSubnet)) b.kv("subnet", trim(s.ntSubnet), "Use this address range");
+      if (s.ntInternal) b.opt("internal", "No access to the outside world");
+      if (s.ntAttachable) b.opt("attachable", "Let standalone containers attach");
+    }
+    if (na === "prune" && s.ntForce) b.flag("-f", "--force", "Don't ask for confirmation");
+    if (["create", "rm", "inspect", "connect", "disconnect"].indexOf(na) > -1) {
+      if (trim(s.ntName)) b.add("The network", [trim(s.ntName)]); else b.warn("Enter the network's name.");
+    }
+    if (na === "connect" || na === "disconnect") { if (trim(s.ntContainer)) b.add("The container", [trim(s.ntContainer)]); else b.warn("Enter the container."); }
+    break;
+
+  case "volume":
+    b.head("Manage volumes", ["volume"]);
+    var va = s.vlAction;
+    b.head({ ls: "List volumes", create: "Create a volume", rm: "Delete a volume", inspect: "Show a volume's details", prune: "Remove unused volumes" }[va], [va]);
+    if (va === "create") {
+      if (trim(s.vlDriver)) b.val("-d", "--driver", trim(s.vlDriver), "Use this volume driver");
+      each(s.vlLabels, function (l) { b.kv("label", l, "Add the label " + l.split("=")[0]); });
+    }
+    if (va === "prune" && s.vlAll) b.flag("-a", "--all", "Also remove unused named volumes");
+    if ((va === "prune" || va === "rm") && s.vlForce) b.flag("-f", "--force", "Don't ask for confirmation");
+    if (["create", "rm", "inspect"].indexOf(va) > -1) { if (trim(s.vlName)) b.add("The volume", [trim(s.vlName)]); else if (va !== "create") b.warn("Enter the volume's name."); }
+    if (va === "rm" || (va === "prune")) b.warn("Deleting a volume permanently removes the data in it.");
+    break;
+
+  case "prune":
+    var what = s.prWhat;
+    b.head("Remove unused " + (what === "system" ? "data" : what + "s"), what === "builder" ? ["builder", "prune"] : [what, "prune"]);
+    if (s.prAll && (what === "system" || what === "image")) b.flag("-a", "--all", "Remove all unused images, not just untagged ones");
+    if (s.prVolumes && what === "system") b.opt("volumes", "Also remove unused volumes");
+    if (trim(s.prUntil)) b.kv("filter", "until=" + trim(s.prUntil), "Only things older than " + trim(s.prUntil));
+    if (s.prForce) b.flag("-f", "--force", "Don't ask for confirmation");
+    if (what === "system" && s.prVolumes) b.warn("This deletes the data in every volume no container is using.");
+    if (what === "volume") b.warn("This deletes the data in unused volumes.");
+    break;
+
+  case "login":
+    b.head("Sign in to a registry", ["login"]);
+    if (trim(s.loUser)) b.val("-u", "--username", trim(s.loUser), "Sign in as this user"); else b.warn("Enter your username.");
+    if (s.loStdin) { b.opt("password-stdin", "Read the password from standard input"); b.warn("Pipe the password in, for example: cat token.txt | docker login ... --password-stdin. This keeps it out of your shell history."); }
+    if (trim(s.loServer)) b.add("The registry", [trim(s.loServer)]);
+    break;
+
+  case "system":
+    b.head("Docker-wide tools", ["system"]);
+    var sa = s.syAction;
+    b.head({ df: "Show disk usage", info: "Show details about this Docker install", events: "Stream events as they happen", prune: "Remove unused data" }[sa], [sa]);
+    if (sa === "df" && s.syVerbose) b.flag("-v", "--verbose", "Show detail for each item");
+    if (sa === "events" && trim(s.sySince)) b.kv("since", trim(s.sySince), "Start from this time");
+    if (sa === "prune") {
+      if (s.syAll) b.flag("-a", "--all", "Remove all unused images");
+      if (s.syVolumes) { b.opt("volumes", "Also remove unused volumes"); b.warn("This deletes the data in every volume no container is using."); }
+      if (s.syForce) b.flag("-f", "--force", "Don't ask for confirmation");
+    }
+    break;
+  }
+  return { groups: b.g, warnings: b.w };
+}
+
+
+// ---- UI ------------------------------------------------------------------
+if (typeof document !== "undefined") {
+  var $ = function (id) { return document.getElementById(id); };
+  var rows = {}, sets = [];
+
+  function make(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function render() {
+    var host = $("form");
+    SECTIONS.forEach(function (sc) {
+      var fs = make("fieldset");
+      fs.appendChild(make("legend", "", sc.title));
+      sc.fields.forEach(function (f) {
+        var row = make("div", "row");
+        var lblWrap = make("div", "lbl");
+        var lbl = make("label", "", f.label); lbl.htmlFor = f.id; lblWrap.appendChild(lbl);
+        var cell = make("div");
+        var inp;
+        if (f.type === "select") {
+          inp = make("select");
+          f.opts.forEach(function (o) { inp.appendChild(new Option(o[1], o[0])); });
+        } else if (f.type === "check") {
+          inp = make("input"); inp.type = "checkbox";
+        } else if (f.type === "area") {
+          inp = make("textarea"); inp.rows = 4; inp.spellcheck = false;
+        } else {
+          inp = make("input"); inp.type = "text"; inp.autocomplete = "off"; inp.spellcheck = false;
+        }
+        inp.id = f.id;
+        if (f.ph) inp.placeholder = f.ph;
+        cell.appendChild(inp);
+        if (f.help) cell.appendChild(make("div", "help", f.help));
+        row.appendChild(lblWrap); row.appendChild(cell);
+        fs.appendChild(row);
+        rows[f.id] = row;
+      });
+      host.appendChild(fs);
+      sets.push({ el: fs, sec: sc });
+    });
+    var ps = $("preset");
+    Object.keys(PRESETS).forEach(function (k) { ps.appendChild(new Option(k, k)); });
+  }
+
+  function readState() {
+    var s = defaults();
+    allFields().forEach(function (f) {
+      var e = $(f.id);
+      s[f.id] = f.type === "check" ? e.checked : e.value;
+    });
+    s.syntax = $("syntax").value;
+    s.shell = $("shell").value;
+    return s;
+  }
+  function setField(id, v) {
+    var e = $(id); if (!e) return;
+    if (e.type === "checkbox") e.checked = !!v; else e.value = v;
+  }
+  function resetAll() {
+    var d = defaults();
+    allFields().forEach(function (f) { setField(f.id, d[f.id]); });
+  }
+
+  var lastText = "", lastGroups = [], lastMerge = true;
+  function update() {
+    var s = readState();
+    allFields().forEach(function (f) { rows[f.id].hidden = !visible(f, s); });
+    sets.forEach(function (x) {
+      x.el.hidden = !x.sec.fields.some(function (f) { return !rows[f.id].hidden; });
+    });
+    var r = build(s);
+    lastGroups = r.groups;
+    lastMerge = s.syntax === "short";
+    lastText = formatCommand(r.groups, s.shell, $("multiline").checked, lastMerge);
+    $("out").textContent = lastText;
+
+    var tbl = $("exp"); tbl.textContent = "";
+    var head = make("tr");
+    var c1 = make("td"); c1.appendChild(make("code", "", APP.cmd));
+    head.appendChild(c1); head.appendChild(make("td", "", APP.run));
+    tbl.appendChild(head);
+    r.groups.forEach(function (g) {
+      var tr = make("tr"), a = make("td"), b = make("td", "", g.d);
+      a.appendChild(make("code", "", tokensText(g, s.shell)));
+      tr.appendChild(a); tr.appendChild(b); tbl.appendChild(tr);
+    });
+
+    var warns = r.warnings.concat(shellWarnings(r.groups, s.shell, s));
+    var w = $("warns"); w.textContent = "";
+    if (warns.length) {
+      w.hidden = false;
+      var ul = make("ul");
+      warns.forEach(function (t) { ul.appendChild(make("li", "", t)); });
+      w.appendChild(ul);
+    } else w.hidden = true;
+  }
+
+  render();
+  resetAll();
+  document.addEventListener("input", update);
+  document.addEventListener("change", update);
+
+  $("preset").addEventListener("change", function () {
+    var p = PRESETS[$("preset").value];
+    if (!p) return;
+    resetAll();
+    Object.keys(p).forEach(function (k) { setField(k, p[k]); });
+    $("preset").value = "";
+    update();
+  });
+  $("reset").addEventListener("click", function () { resetAll(); update(); });
+
+  $("copy").addEventListener("click", function () {
+    var done = function () {
+      var b = $("copy"); b.textContent = "Copied!";
+      setTimeout(function () { b.textContent = "Copy command"; }, 1500);
+    };
+    var fallback = function () {
+      var t = document.createElement("textarea");
+      t.value = lastText; t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.appendChild(t); t.select();
+      try { document.execCommand("copy"); done(); } catch (e) {}
+      document.body.removeChild(t);
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(lastText).then(done, fallback);
+    else fallback();
+  });
+
+  $("save").addEventListener("click", function () {
+    var shell = $("shell").value;
+    var ext = shell === "posix" ? "sh" : (shell === "ps" ? "ps1" : "bat");
+    var head = shell === "posix" ? "#!/usr/bin/env bash\n" : (shell === "cmd" ? "@echo off\n" : "");
+    var blob = new Blob([head + formatCommand(lastGroups, shell, true, lastMerge) + "\n"], { type: "text/plain" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = APP.file + "." + ext;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  update();
+}
+
+if (typeof module !== "undefined") module.exports = {
+  APP: APP, build: build, formatCommand: formatCommand, defaults: defaults, shellWarnings: shellWarnings,
+  PRESETS: PRESETS, SECTIONS: SECTIONS, quote: quote, allFields: allFields, visible: visible, splitArgs: splitArgs
+};
+
+</script>
+</body>
+</html>
