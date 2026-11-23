@@ -27,3 +27,5 @@ Only the options for the command you pick are shown, so the page stays short.
 Less common options (Swarm, buildx bake, contexts, plugins, advanced logging drivers) are left out. See `docker --help` for those.
 
 Just open `DockerDepot.html` in any browser. It works with no internet connection.
+
+<img width="749" height="964" alt="docker" src="https://github.com/user-attachments/assets/62f335fa-8198-4733-a0b6-f4df55294be3" />
